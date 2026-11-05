@@ -1,348 +1,362 @@
 
-# ============================================================
-# STUDENT PERFORMANCE PREDICTION SYSTEM
-# Google Colab + Machine Learning + Gradio
-# ============================================================
-
-!pip -q install gradio pandas numpy scikit-learn matplotlib seaborn
-
-# 1. IMPORT LIBRARIES
-import gradio as gr
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, r2_score
-
-# 2. LOAD DATASET DIRECTLY FROM ONLINE SOURCE
-url = "https://raw.githubusercontent.com/plotly/datasets/master/StudentsPerformance.csv"
-
-df = pd.read_csv(url)
-
-# 3. DATA PREPROCESSING
-df.columns = [
-    "gender",
-    "race_ethnicity",
-    "parental_education",
-    "lunch",
-    "test_preparation",
-    "math_score",
-    "reading_score",
-    "writing_score"
-]
-
-# Convert categorical columns into numerical values
-df_encoded = pd.get_dummies(
-    df,
-    columns=[
-        "gender",
-        "race_ethnicity",
-        "parental_education",
-        "lunch",
-        "test_preparation"
-    ],
-    dtype=int
-)
-
-X = df_encoded.drop("math_score", axis=1)
-y = df_encoded["math_score"]
-
-# 4. TRAIN TEST SPLIT
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y,
-    test_size=0.2,
-    random_state=42
-)
-
-# 5. TRAIN MACHINE LEARNING MODEL
-model = RandomForestRegressor(
-    n_estimators=150,
-    random_state=42
-)
-
-model.fit(X_train, y_train)
-
-# 6. MODEL EVALUATION
-y_pred = model.predict(X_test)
-
-mae = mean_absolute_error(y_test, y_pred)
-r2 = r2_score(y_test, y_pred)
-
-print("Model Training Completed!")
-print("Mean Absolute Error:", round(mae, 2))
-print("R2 Score:", round(r2, 3))
-
-# 7. PREDICTION FUNCTION
-def predict_performance(
-    gender,
-    race,
-    parental,
-    lunch,
-    preparation,
-    reading,
-    writing
-):
-
-    input_df = pd.DataFrame([{
-        "reading_score": reading,
-        "writing_score": writing,
-        "gender": gender,
-        "race_ethnicity": race,
-        "parental_education": parental,
-        "lunch": lunch,
-        "test_preparation": preparation
-    }])
-
-    input_encoded = pd.get_dummies(
-        input_df,
-        columns=[
-            "gender",
-            "race_ethnicity",
-            "parental_education",
-            "lunch",
-            "test_preparation"
-        ],
-        dtype=int
-    )
-
-    input_encoded = input_encoded.reindex(
-        columns=X.columns,
-        fill_value=0
-    )
-
-    predicted_score = float(
-        model.predict(input_encoded)[0]
-    )
-
-    predicted_score = np.clip(predicted_score, 0, 100)
-
-    if predicted_score >= 80:
-        category = "Excellent 🌟"
-    elif predicted_score >= 60:
-        category = "Good 👍"
-    elif predicted_score >= 40:
-        category = "Average 📘"
-    else:
-        category = "Needs Improvement 📚"
-
-    result = f"""
-# 🎓 Student Performance Result
-
-## Predicted Mathematics Score: {predicted_score:.2f}/100
-
-### Performance Category: {category}
-
-- Reading Score: {reading}
-- Writing Score: {writing}
-- Model R² Score: {r2:.3f}
-
-*This is an estimate from a machine learning model,
-not an official examination result.*
-"""
-
-    return result
-
-# 8. DATASET VISUALIZATION
-def dataset_chart():
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    sns.scatterplot(
-        data=df,
-        x="reading_score",
-        y="math_score",
-        hue="gender",
-        palette="Set2",
-        ax=ax
-    )
-
-    ax.set_title("Reading Score vs Mathematics Score")
-    ax.set_xlabel("Reading Score")
-    ax.set_ylabel("Mathematics Score")
-
-    plt.tight_layout()
-    return fig
-
-# 9. GRADIO USER INTERFACE
-css = """
-.gradio-container {
-    background: linear-gradient(135deg, #e0f2fe, #f5f3ff);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StudentAI - Performance Prediction</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+  --bg:#080e1d;--panel:#111b30;--card:#192640;
+  --line:#2b3b5c;--text:#edf3ff;--muted:#a4b2cc;
+  --cyan:#54d7ed;--purple:#9585ff;--green:#50d6a0;
 }
-"""
+*{box-sizing:border-box}
+body{
+  margin:0;background:radial-gradient(circle at 85% 0%,#24265a,transparent 35%),var(--bg);
+  color:var(--text);font-family:Arial,sans-serif
+}
+header{
+  padding:20px 6%;display:flex;justify-content:space-between;
+  align-items:center;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:12px
+}
+.logo{font-size:23px;font-weight:800}
+.logo span{color:var(--cyan)}
+.status{font-size:12px;color:var(--muted)}
+.hero{padding:55px 6% 25px;max-width:1400px;margin:auto}
+.eyebrow{color:var(--cyan);font-size:12px;letter-spacing:3px;font-weight:bold}
+h1{font-size:clamp(32px,5vw,55px);margin:15px 0}
+h1 span{color:var(--cyan)}
+.hero p{color:var(--muted);line-height:1.8;max-width:700px}
+.container{max-width:1400px;margin:auto;padding:20px 6% 60px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:20px}
+.stat,.card{
+  background:linear-gradient(145deg,#172541,#111a2e);
+  border:1px solid var(--line);border-radius:17px;padding:21px
+}
+.stat small{color:var(--muted)}
+.stat strong{display:block;font-size:22px;margin-top:9px}
+.layout{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+h2{margin-top:0}
+.sub{color:var(--muted);font-size:13px;line-height:1.7;margin-bottom:20px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+label{display:block;font-size:13px;color:#cbd6eb;margin-bottom:7px}
+input,select{
+  width:100%;padding:12px;background:#0c1528;
+  border:1px solid var(--line);border-radius:10px;color:white
+}
+button{
+  border:0;border-radius:11px;padding:14px;font-weight:bold;cursor:pointer
+}
+.primary{
+  width:100%;margin-top:22px;
+  background:linear-gradient(110deg,var(--cyan),#9b8cff);color:#081324
+}
+.primary:disabled{opacity:.5;cursor:wait}
+.result{
+  display:none;margin-top:20px;padding:20px;
+  border:1px solid #3b6680;border-radius:15px;
+  background:linear-gradient(130deg,#202b56,#12394a)
+}
+.result.show{display:block}
+.score{font-size:48px;font-weight:800;color:var(--cyan);margin:10px 0}
+.pill{display:inline-block;padding:7px 12px;background:#263b5d;border-radius:30px;font-size:12px}
+.chart{height:260px;margin-top:20px}
+.tip{padding:13px;background:#102d30;border:1px solid #23534c;border-radius:12px;margin-top:12px;font-size:13px;line-height:1.6}
+.error{display:none;padding:12px;background:#48252c;color:#ffc1c1;border-radius:10px;margin-top:12px}
+.notice{color:var(--muted);font-size:12px;line-height:1.7;margin-top:20px}
+.metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.metric{background:#0c1528;padding:15px;border-radius:12px}
+.metric strong{display:block;font-size:24px;color:var(--cyan);margin-top:8px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:10px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--cyan)}
+footer{text-align:center;padding:25px;color:var(--muted);border-top:1px solid var(--line);font-size:12px}
+@media(max-width:850px){.layout{grid-template-columns:1fr}}
+@media(max-width:550px){
+  .form-grid,.stats,.metric-grid{grid-template-columns:1fr}
+  .hero,.container{padding-left:5%;padding-right:5%}
+}
+</style>
+</head>
+<body>
 
-with gr.Blocks(
-    theme=gr.themes.Soft(
-        primary_hue="blue",
-        secondary_hue="purple"
-    ),
-    css=css,
-    title="Student Performance AI"
-) as demo:
+<header>
+  <div class="logo">STUDENT<span>AI</span> ✦</div>
+  <div class="status" id="status">● Checking AI server...</div>
+</header>
 
-    gr.Markdown("""
-    # 🎓 Student Performance Prediction System
+<section class="hero">
+  <div class="eyebrow">ARTIFICIAL INTELLIGENCE · EDUCATION</div>
+  <h1>Predict Your<br><span>Academic Performance.</span></h1>
+  <p>
+    A machine-learning demonstration that estimates a student's
+    mathematics score from academic information and provides
+    useful learning suggestions.
+  </p>
+</section>
 
-    ### AI-Powered Academic Performance Analysis
+<main class="container">
 
-    Welcome to the Student Performance Prediction System.
-    Enter student details to estimate their mathematics score.
-    """)
+  <div class="stats">
+    <div class="stat"><small>ML Algorithm</small><strong>Random Forest</strong></div>
+    <div class="stat"><small>Dataset</small><strong>Student Exams</strong></div>
+    <div class="stat"><small>Prediction Scale</small><strong>0–100 Marks</strong></div>
+  </div>
 
-    with gr.Tab("🔮 Predict Performance"):
+  <div class="layout">
 
-        gr.Markdown("### Enter Student Information")
+    <section class="card">
+      <h2>🎓 Student Details</h2>
+      <p class="sub">Enter academic information to request an AI estimate.</p>
 
-        with gr.Row():
+      <form id="predictionForm">
+        <div class="form-grid">
 
-            with gr.Column():
+          <div>
+            <label for="reading">Reading Score (0–100)</label>
+            <input id="reading" type="number" min="0" max="100" value="75" required>
+          </div>
 
-                gender = gr.Dropdown(
-                    ["male", "female"],
-                    value="male",
-                    label="Gender"
-                )
+          <div>
+            <label for="writing">Writing Score (0–100)</label>
+            <input id="writing" type="number" min="0" max="100" value="75" required>
+          </div>
 
-                race = gr.Dropdown(
-                    ["group A", "group B", "group C",
-                     "group D", "group E"],
-                    value="group C",
-                    label="Race/Ethnicity Group"
-                )
+          <div>
+            <label for="parental">Parental Education</label>
+            <select id="parental">
+              <option>some high school</option>
+              <option>high school</option>
+              <option selected>some college</option>
+              <option>associate's degree</option>
+              <option>bachelor's degree</option>
+              <option>master's degree</option>
+            </select>
+          </div>
 
-                parental = gr.Dropdown(
-                    [
-                        "some high school",
-                        "high school",
-                        "some college",
-                        "associate's degree",
-                        "bachelor's degree",
-                        "master's degree"
-                    ],
-                    value="some college",
-                    label="Parental Education"
-                )
+          <div>
+            <label for="lunch">Lunch Type</label>
+            <select id="lunch">
+              <option value="standard" selected>Standard</option>
+              <option value="free/reduced">Free / Reduced</option>
+            </select>
+          </div>
 
-                lunch = gr.Dropdown(
-                    ["standard", "free/reduced"],
-                    value="standard",
-                    label="Lunch Type"
-                )
+          <div>
+            <label for="preparation">Test Preparation</label>
+            <select id="preparation">
+              <option value="none">Not completed</option>
+              <option value="completed" selected>Completed</option>
+            </select>
+          </div>
 
-                preparation = gr.Dropdown(
-                    ["none", "completed"],
-                    value="completed",
-                    label="Test Preparation Course"
-                )
+        </div>
 
-                reading = gr.Slider(
-                    0, 100, value=75,
-                    step=1,
-                    label="Reading Score"
-                )
+        <button class="primary" id="predictButton" type="submit">
+          ✦ Predict Performance
+        </button>
+        <div id="error" class="error" role="alert"></div>
+      </form>
 
-                writing = gr.Slider(
-                    0, 100, value=75,
-                    step=1,
-                    label="Writing Score"
-                )
+      <p class="notice">
+        This is an educational estimate, not an official grade or
+        a guaranteed examination result.
+      </p>
+    </section>
 
-                predict_btn = gr.Button(
-                    "🚀 Predict Student Performance",
-                    variant="primary"
-                )
+    <section class="card">
+      <h2>📊 AI Prediction Report</h2>
+      <p class="sub">Your prediction and suggestions will appear here.</p>
 
-            with gr.Column():
+      <div id="empty" class="tip">
+        Enter the details and select Predict Performance.
+      </div>
 
-                output = gr.Markdown(
-                    "### Your prediction will appear here."
-                )
+      <div id="result" class="result">
+        <div id="level" class="pill">Prediction</div>
+        <div class="score">
+          <span id="score">0</span>
+          <small style="font-size:16px;color:white">/ 100</small>
+        </div>
+        <p id="summary"></p>
+        <div class="chart"><canvas id="scoreChart"></canvas></div>
+        <h3>AI Learning Suggestions</h3>
+        <div id="tips"></div>
+      </div>
+    </section>
 
-        predict_btn.click(
-            fn=predict_performance,
-            inputs=[
-                gender, race, parental, lunch,
-                preparation, reading, writing
-            ],
-            outputs=output
-        )
+  </div>
 
-    with gr.Tab("📊 Dataset Analysis"):
+  <section class="card" style="margin-top:20px">
+    <h2>📈 Model Evaluation</h2>
+    <p class="sub">Metrics calculated by the Python backend on its test split.</p>
+    <div class="metric-grid">
+      <div class="metric">MAE<strong id="mae">—</strong></div>
+      <div class="metric">RMSE<strong id="rmse">—</strong></div>
+      <div class="metric">R² Score<strong id="r2">—</strong></div>
+    </div>
+  </section>
 
-        gr.Markdown("### Dataset Overview")
+  <section class="card" style="margin-top:20px">
+    <h2>ℹ️ About This Project</h2>
+    <p class="sub">
+      StudentAI demonstrates a Random Forest regression model trained
+      on a public student examination dataset. Gender and race/ethnicity
+      are not used as prediction inputs.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Technology</th><th>Purpose</th></tr>
+        <tr><td>HTML, CSS, JavaScript</td><td>Website interface</td></tr>
+        <tr><td>Python + Flask</td><td>Prediction API</td></tr>
+        <tr><td>Scikit-learn</td><td>Machine Learning</td></tr>
+        <tr><td>Chart.js</td><td>Result visualization</td></tr>
+      </table>
+    </div>
+  </section>
 
-        gr.Markdown(f"""
-        - Total Students: **{len(df)}**
-        - Total Features: **8**
-        - Target Variable: **Mathematics Score**
-        - Training Records: **{len(X_train)}**
-        - Testing Records: **{len(X_test)}**
-        """)
+</main>
 
-        gr.Dataframe(
-            value=df.head(10),
-            label="Dataset Preview"
-        )
+<footer>StudentAI · Educational Machine Learning Project</footer>
 
-        gr.Plot(
-            value=dataset_chart()
-        )
+<script>
+// Replace this with your deployed Render backend URL.
+// Example: https://student-performance-ai.onrender.com
+const API_BASE = "https://YOUR-BACKEND-URL.onrender.com";
 
-    with gr.Tab("📈 Model Performance"):
+const $ = id => document.getElementById(id);
+let scoreChart = null;
 
-        gr.Markdown("## Machine Learning Evaluation")
+function showError(message) {
+  $("error").textContent = message;
+  $("error").style.display = "block";
+}
 
-        gr.Markdown(f"""
-        ### Mean Absolute Error: {mae:.2f}
+async function checkServer() {
+  if (API_BASE.includes("YOUR-BACKEND-URL")) {
+    $("status").textContent = "● Backend URL not configured";
+    $("status").style.color = "#ffd27d";
+    return;
+  }
 
-        ### R² Score: {r2:.3f}
+  try {
+    const response = await fetch(`${API_BASE}/api/health`);
+    if (!response.ok) throw new Error("Server unavailable");
 
-        **Algorithm:** Random Forest Regressor
+    const data = await response.json();
+    $("status").textContent = data.model_ready
+      ? "● AI Server Online"
+      : "● Model Starting";
+    $("status").style.color = data.model_ready ? "#50d6a0" : "#ffd27d";
 
-        **Training Split:** 80%
+    if (data.metrics) showMetrics(data.metrics);
+  } catch (error) {
+    $("status").textContent = "● Server Offline";
+    $("status").style.color = "#ff9999";
+  }
+}
 
-        **Testing Split:** 20%
-        """)
+function showMetrics(metrics) {
+  $("mae").textContent = metrics.mae ?? "—";
+  $("rmse").textContent = metrics.rmse ?? "—";
+  $("r2").textContent = metrics.r2 ?? "—";
+}
 
-    with gr.Tab("ℹ️ About Project"):
+$("predictionForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  $("error").style.display = "none";
 
-        gr.Markdown("""
-        ## About This Project
+  if (API_BASE.includes("YOUR-BACKEND-URL")) {
+    showError("First deploy the Python backend and set its URL in API_BASE.");
+    return;
+  }
 
-        Student Performance Prediction is a machine
-        learning application that estimates student
-        mathematics scores.
+  const reading = Number($("reading").value);
+  const writing = Number($("writing").value);
 
-        ### Technologies Used
+  if (!Number.isFinite(reading) || reading < 0 || reading > 100 ||
+      !Number.isFinite(writing) || writing < 0 || writing > 100) {
+    showError("Reading and writing scores must be between 0 and 100.");
+    return;
+  }
 
-        - Python
-        - Pandas
-        - NumPy
-        - Scikit-learn
-        - Matplotlib
-        - Seaborn
-        - Gradio
+  const payload = {
+    reading_score: reading,
+    writing_score: writing,
+    parental_education: $("parental").value,
+    lunch: $("lunch").value,
+    test_preparation: $("preparation").value
+  };
 
-        ### Algorithm
+  $("predictButton").disabled = true;
+  $("predictButton").textContent = "Predicting...";
 
-        Random Forest Regression
+  try {
+    const response = await fetch(`${API_BASE}/api/predict`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
 
-        ### Dataset
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Prediction failed.");
 
-        Students Performance in Exams - Kaggle
+    const score = Number(data.prediction);
+    if (!Number.isFinite(score)) throw new Error("Invalid prediction received.");
 
-        ### Objective
+    $("empty").style.display = "none";
+    $("result").classList.add("show");
+    $("score").textContent = score.toFixed(2);
+    $("level").textContent = data.level;
+    $("summary").textContent =
+      `Estimated Mathematics score: ${score.toFixed(2)} out of 100.`;
 
-        To demonstrate how machine learning can
-        analyze academic data and estimate student
-        performance.
-        """)
+    $("tips").replaceChildren();
+    (data.suggestions || []).forEach(item => {
+      const div = document.createElement("div");
+      div.className = "tip";
+      div.textContent = "✦ " + item;
+      $("tips").appendChild(div);
+    });
 
-# 10. LAUNCH LIVE WEB APPLICATION
-print("Starting Student Performance Web Application...")
+    if (data.metrics) showMetrics(data.metrics);
 
-demo.launch(
-    share=True,
-    debug=True
-)
+    if (scoreChart) scoreChart.destroy();
+
+    scoreChart = new Chart($("scoreChart"), {
+      type: "bar",
+      data: {
+        labels: ["Reading", "Writing", "Predicted Math"],
+        datasets: [{
+          label: "Marks",
+          data: [reading, writing, score],
+          backgroundColor: ["#6479ad", "#9585ff", "#54d7ed"],
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {min: 0, max: 100, ticks: {color: "#cbd5e1"}},
+          x: {ticks: {color: "#cbd5e1"}}
+        },
+        plugins: {legend: {display: false}}
+      }
+    });
+
+  } catch (error) {
+    showError(error.message || "Could not connect to the AI server.");
+  } finally {
+    $("predictButton").disabled = false;
+    $("predictButton").textContent = "✦ Predict Performance";
+  }
+});
+
+checkServer();
+</script>
+</body>
+</html>
